@@ -1,19 +1,13 @@
-use std::{
-    cell::RefCell,
-    str::FromStr,
-};
+use std::{cell::RefCell, str::FromStr};
 
 use chrono::{DateTime, Utc};
+use components::{AddFeed, Feed};
 use diesel::{
-    backend::Backend,
-    deserialize::FromSql,
-    expression::AsExpression,
-    serialize::ToSql,
-    sql_types, Connection, SqliteConnection,
+    backend::Backend, deserialize::FromSql, expression::AsExpression, serialize::ToSql, sql_types,
+    Connection, SqliteConnection,
 };
 use dioxus::prelude::*;
 
-use components::Feed;
 use rss::{Channel, Guid};
 use url::Url;
 
@@ -179,12 +173,20 @@ fn main() {
     dioxus::launch(App);
 }
 
+enum CurrentView {
+    NewFeed(Channel),
+    AllFeeds(Vec<Article>),
+    SelectedFeed(Channel),
+}
+
 #[component]
 fn App() -> Element {
-    let mut added_new_feed = use_signal(|| false);
-    let articles = use_resource(move || async move {
-        added_new_feed.set(false);
-        load_all_feeds().await
+    let mut current_view: Signal<Option<CurrentView>> = use_signal(|| None);
+    use_effect(move || {
+        spawn(async move {
+            let feeds = load_all_feeds().await;
+            current_view.set(Some(CurrentView::AllFeeds(feeds)));
+        });
     });
 
     rsx! {
@@ -192,7 +194,7 @@ fn App() -> Element {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
-        // AddFeed { current_feed_url, current_feed }
-        Feed { articles: articles.value(), }
+        AddFeed { current_view }
+        Feed{ current_view }
     }
 }

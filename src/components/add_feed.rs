@@ -6,11 +6,11 @@ use dioxus::prelude::*;
 use rss::Channel;
 use url::Url;
 
-use crate::{NewFeedRecord, DB};
+use crate::{CurrentView, NewFeedRecord, DB};
 
 // https://feeds.arstechnica.com/arstechnica/index
 #[component]
-pub fn AddFeed(current_feed_url: Signal<Option<Url>>, current_feed: Signal<Channel>) -> Element {
+pub fn AddFeed(current_view: Signal<Option<CurrentView>>) -> Element {
     rsx! {
         form { onsubmit:  move |event| {
                 let form = event.data.values();
@@ -35,8 +35,7 @@ pub fn AddFeed(current_feed_url: Signal<Option<Url>>, current_feed: Signal<Chann
                                         Err(error) => panic!("{:?}", error)
                                     };
                                 });
-                                current_feed_url.set(Some(url));
-                                current_feed.set(channel);
+                                current_view.set(Some(CurrentView::NewFeed(channel)));
 
                             },
                             Err(err) => {
