@@ -8,3 +8,6 @@
 
 /testdb.db
 /test_feed.rss
+
+node_modules
+tailwind.css

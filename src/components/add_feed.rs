@@ -48,11 +48,11 @@ pub fn AddFeed(current_view: Signal<Option<CurrentView>>) -> Element {
                 // add the feed to the database
                 // only add feed if successful when retrieving feed
                 // try the multiple potential feeds
-            label {
-                "Feed URL"
-                input { name: "feed", r#type: "url", required: true }
+            label { class: "input",
+                span { class: "label", "Feed URL"}
+                input { class: "input", name: "feed", r#type: "url", required: true }
             }
-            button {
+            button { class: "btn",
                 "Add Feed"
             }
         },

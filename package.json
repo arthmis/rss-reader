@@ -1,0 +1,26 @@
+{
+  "name": "rss_reader",
+  "version": "1.0.0",
+  "description": "Your new jumpstart project includes basic organization with an organized `assets` folder and a `components` folder. \r If you chose to develop with the router feature, you will also have a `views` folder.",
+  "main": "index.js",
+  "devDependencies": {
+    "daisyui": "^5.0.17"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arthmis/rss-reader.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/arthmis/rss-reader/issues"
+  },
+  "homepage": "https://github.com/arthmis/rss-reader#readme",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.3",
+    "tailwindcss": "^4.1.3"
+  }
+}
