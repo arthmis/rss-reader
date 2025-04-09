@@ -221,7 +221,15 @@ fn App() -> Element {
                 }
                 ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
                     for (i, record) in stored_feeds.read().iter().enumerate() {
-                        li { class: if selected_feed_index.read().is_some() && selected_feed_index.read().unwrap() == i {"active-feed"},
+                        li { onmounted: move |element| async move { 
+                            // scroll the selected feed into view
+                            if let Some(index) = &*selected_feed_index.read() {
+                                if *index == i {
+                                    let _ = element.scroll_to(ScrollBehavior::Smooth).await;
+                                }
+                            }
+                        },
+                        class: if selected_feed_index.read().is_some() && selected_feed_index.read().unwrap() == i {"active-feed"},
                             a { onclick: move |_| async move {
                                 let content = reqwest::get(stored_feeds.read()[i].feed_url.clone())
                                 .await.unwrap()
