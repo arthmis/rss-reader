@@ -74,6 +74,7 @@ pub struct FeedRecord {
     pub id: i32,
     pub url: String,
     pub feed_url: String,
+    pub name: String,
     #[diesel(deserialize_as = StringTime)]
     pub create_date: DateTime<Utc>,
     #[diesel(deserialize_as = StringTime)]
@@ -85,6 +86,7 @@ pub struct FeedRecord {
 pub struct NewFeedRecord {
     pub url: String,
     pub feed_url: String,
+    pub name: String,
     #[diesel(serialize_as = StringTime)]
     pub create_date: DateTime<Utc>,
     #[diesel(serialize_as = StringTime)]
@@ -107,7 +109,7 @@ pub struct Article {
     channel_link: Url,
 }
 
-async fn load_all_feeds() -> Vec<Article> {
+async fn load_all_feeds() -> (Vec<FeedRecord>, Vec<Article>) {
     let feed_urls = DB.with_borrow_mut(|conn| {
         use schema::feeds::dsl::*;
 
@@ -166,7 +168,7 @@ async fn load_all_feeds() -> Vec<Article> {
 
         false
     });
-    articles
+    (feed_urls, articles)
 }
 
 fn main() {
@@ -182,10 +184,14 @@ enum CurrentView {
 #[component]
 fn App() -> Element {
     let mut current_view: Signal<Option<CurrentView>> = use_signal(|| None);
+    let mut selected_feed: Signal<Option<usize>> = use_signal(|| None);
+    let mut stored_feeds: Signal<Vec<FeedRecord>> = use_signal(|| Vec::new());
+
     use_effect(move || {
         spawn(async move {
-            let feeds = load_all_feeds().await;
+            let (feed_urls, feeds) = load_all_feeds().await;
             current_view.set(Some(CurrentView::AllFeeds(feeds)));
+            stored_feeds.set(feed_urls);
         });
     });
 
@@ -198,10 +204,10 @@ fn App() -> Element {
             href: asset!("/assets/tailwind.css")
         }
 
-        div { class: "drawer lg:drawer-open",
+        div { class: "drawer md:drawer-open",
             input { id: "my-drawer-2", r#type: "checkbox", class: "drawer-toggle"}
             div { class: "drawer-content flex flex-col items-center justify-center",
-                label { for: "my-drawer-2", class: "btn btn-primary drawer-button lg:hidden",
+                label { for: "my-drawer-2", class: "btn btn-primary drawer-button md:hidden",
                     "Open drawer"
                 }
                 AddFeed { current_view }
@@ -210,12 +216,26 @@ fn App() -> Element {
             div { class: "drawer-side",
                 label { for: "my-drawer-2", aria_label: "close sidebar", class: "drawer-overlay",
                 } 
-                ul { class: "menu bg-base-200 text-base-content min-h-full w-80 p-4",
-                    li {
-                        "Item 1"
-                    }
-                    li {
-                        "item 2"
+                ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
+                    for (i, record) in stored_feeds.read().iter().enumerate() {
+                        li {
+                            a { onclick: move |_| async move { 
+                                selected_feed.set(Some(i));
+                                let content = reqwest::get(stored_feeds.read()[i].feed_url.clone())
+                                .await.unwrap()
+                                .bytes()
+                                .await.unwrap();
+                                let channel = Channel::read_from(&content[..]);
+                                match channel {
+                                    Ok(channel) => {
+                                        current_view.set(Some(CurrentView::SelectedFeed(channel)));
+                                    },
+                                    Err(err) => panic!("{:?}", err),
+                                };
+                            },
+                                {record.name.clone()}
+                            }
+                        }
                     }
                 }
             }

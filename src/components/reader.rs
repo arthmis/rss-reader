@@ -8,13 +8,15 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
         match &*current_view.read() {
             Some(view) => rsx!{
                 match view {
-                    CurrentView::NewFeed(channel) => rsx!{
+                    CurrentView::NewFeed(channel) | CurrentView::SelectedFeed(channel) => rsx!{
                         h1 { "All Articles" }
                         ul {
                             for item in channel.items.iter() {
                                 // li { key: "{item.guid}",
                                 li {
-                                    h2 {
+                                    div { class: "card card-border bg-base-100 w-96 shadow-sm",
+                                        div { class: "card-body",
+                                            h2 { class: "card-title",
                                         a {
                                             href: item.link.clone().unwrap(),
                                             {item.title.clone().unwrap()}
@@ -22,6 +24,8 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                                     }
                                     p {
                                         {item.description.clone().unwrap()}
+                                    }
+                                        }
                                     }
                                 }
                             }
@@ -50,7 +54,6 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                             }
                         }
                     },
-                    CurrentView::SelectedFeed(channel) => rsx!{},
                     },
                 },
                 None => rsx!{},

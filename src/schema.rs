@@ -5,6 +5,7 @@ diesel::table! {
         id -> Integer,
         url -> Text,
         feed_url -> Text,
+        name -> Text,
         create_date -> Text,
         update_date -> Text,
     }

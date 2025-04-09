@@ -28,7 +28,12 @@ pub fn AddFeed(current_view: Signal<Option<CurrentView>>) -> Element {
                             Ok(channel) => {
                                 // save to database
                                 use crate::schema::feeds;
-                                let new_feed = NewFeedRecord { url: url.clone().to_string(), feed_url: url.clone().to_string(), create_date: Utc::now(), update_date: Utc::now() };
+                                let new_feed = NewFeedRecord { 
+                                    url: url.clone().to_string(),
+                                    feed_url: url.clone().to_string(),
+                                    name: channel.title.clone(),
+                                    create_date: Utc::now(),
+                                    update_date: Utc::now() };
                                 DB.with_borrow_mut(|conn| {
                                     match insert_into(feeds::table).values(new_feed).execute(conn) {
                                         Ok(_) => dbg!("added feed"),
