@@ -176,16 +176,19 @@ fn main() {
 }
 
 enum CurrentView {
-    NewFeed(Channel),
     AllFeeds(Vec<Article>),
-    SelectedFeed(Channel),
+    SelectedFeed(Channel, usize),
 }
 
 #[component]
 fn App() -> Element {
     let mut current_view: Signal<Option<CurrentView>> = use_signal(|| None);
-    let mut selected_feed: Signal<Option<usize>> = use_signal(|| None);
-    let mut stored_feeds: Signal<Vec<FeedRecord>> = use_signal(|| Vec::new());
+    let mut stored_feeds: Signal<Vec<FeedRecord>> = use_signal(Vec::new);
+
+    let selected_feed_index = use_memo(move || match &*current_view.read() {
+        Some(CurrentView::SelectedFeed(_, selected_index)) => Some(*selected_index),
+        _ => None,
+    });
 
     use_effect(move || {
         spawn(async move {
@@ -210,17 +213,16 @@ fn App() -> Element {
                 label { for: "my-drawer-2", class: "btn btn-primary drawer-button md:hidden",
                     "Open drawer"
                 }
-                AddFeed { current_view }
+                AddFeed { current_view, stored_feeds }
                 Feed{ current_view }
             }
             div { class: "drawer-side",
                 label { for: "my-drawer-2", aria_label: "close sidebar", class: "drawer-overlay",
-                } 
+                }
                 ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
                     for (i, record) in stored_feeds.read().iter().enumerate() {
-                        li {
-                            a { onclick: move |_| async move { 
-                                selected_feed.set(Some(i));
+                        li { class: if selected_feed_index.read().is_some() && selected_feed_index.read().unwrap() == i {"active-feed"},
+                            a { onclick: move |_| async move {
                                 let content = reqwest::get(stored_feeds.read()[i].feed_url.clone())
                                 .await.unwrap()
                                 .bytes()
@@ -228,7 +230,7 @@ fn App() -> Element {
                                 let channel = Channel::read_from(&content[..]);
                                 match channel {
                                     Ok(channel) => {
-                                        current_view.set(Some(CurrentView::SelectedFeed(channel)));
+                                        current_view.set(Some(CurrentView::SelectedFeed(channel, i)));
                                     },
                                     Err(err) => panic!("{:?}", err),
                                 };

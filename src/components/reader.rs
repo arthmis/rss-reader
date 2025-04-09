@@ -8,7 +8,7 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
         match &*current_view.read() {
             Some(view) => rsx!{
                 match view {
-                    CurrentView::NewFeed(channel) | CurrentView::SelectedFeed(channel) => rsx!{
+                    CurrentView::SelectedFeed(channel, ..) => rsx!{
                         h1 { "All Articles" }
                         ul {
                             for item in channel.items.iter() {
