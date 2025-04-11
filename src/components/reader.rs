@@ -8,8 +8,8 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
         match &*current_view.read() {
             Some(view) => rsx!{
                 match view {
-                    CurrentView::SelectedFeed(channel, ..) => rsx!{
-                        h1 { "All Articles" }
+                    CurrentView::SelectedFeed(channel) => rsx!{
+                        h1 { "{channel.name.clone()}" }
                         ul {
                             for item in channel.items.iter() {
                                 // li { key: "{item.guid}",

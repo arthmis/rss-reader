@@ -1,13 +1,13 @@
 use std::{cell::RefCell, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use components::{AddFeed, Feed};
+use components::{AddFeed, Feed, FeedNameId, SideNavItem};
+use diesel::result::Error as DieselError;
 use diesel::{
     backend::Backend, deserialize::FromSql, expression::AsExpression, serialize::ToSql, sql_types,
     Connection, SqliteConnection,
 };
 use dioxus::prelude::*;
-use diesel::result::Error as DieselError;
 
 use rss::{Channel, Guid};
 use url::Url;
@@ -227,7 +227,7 @@ enum CurrentView {
 
 pub struct ChannelFeed {
     name: String,
-    id: i32,
+    channel_id: i32,
     items: Vec<FeedItemRecord>,
     selected: usize,
 }
@@ -250,11 +250,131 @@ fn App() -> Element {
         });
     });
 
+    let refresh_button_click_handler = move |_| async move {
+        match &mut *current_view.write() {
+            Some(view) => {
+                match view {
+                    CurrentView::AllFeeds(articles) => todo!(),
+                    CurrentView::SelectedFeed(channel_feed) => {
+                        // TODO store the feed URL in ChannelFeed struct
+                        let url = {
+                            let feeds = stored_feeds.read();
+                            let selected = selected_feed_index.read().unwrap();
+                            feeds[selected].feed_url.clone()
+                        };
+
+                        let content = reqwest::get(url.clone())
+                            .await
+                            .unwrap()
+                            .bytes()
+                            .await
+                            .unwrap();
+
+                        let channel = Channel::read_from(&content[..]);
+                        match channel {
+                            Ok(channel) => {
+                                let (feeds, feed_items) = DB.with_borrow_mut(|conn| {
+                                    {
+                                        use crate::schema::feed_items;
+                                        use diesel::dsl::insert_into;
+
+                                        // TODO: when inserting, if an item URL is NULL add custom
+                                        // handling that checks if other values are unique
+                                        let now = Utc::now();
+                                        let items = channel
+                                            .items
+                                            .clone()
+                                            .into_iter()
+                                            .map(|item| NewFeedItemRecord {
+                                                channel_id: channel_feed.channel_id,
+                                                title: item.title,
+                                                url: item.link,
+                                                description: item.description,
+                                                author: item.author,
+                                                pub_date: item.pub_date,
+                                                create_date: now,
+                                                update_date: now,
+                                            })
+                                            .collect::<Vec<_>>();
+                                        let items_len = items.len();
+
+                                        for item in items.into_iter() {
+                                            let row_count_inserted =
+                                                match insert_into(feed_items::table)
+                                                    .values(item)
+                                                    .execute(conn)
+                                                {
+                                                    Ok(record) => record,
+                                                    Err(error) => {
+                                                        match error {
+                                                            // TODO: if insert fails then try an update in future
+                                                            DieselError::DatabaseError(
+                                                                database_error_kind,
+                                                                database_error_information,
+                                                            ) => {
+                                                                dbg!(
+                                                                    database_error_kind,
+                                                                    database_error_information
+                                                                );
+                                                                continue;
+                                                            }
+                                                            _ => todo!(),
+                                                        }
+                                                    }
+                                                };
+                                            dbg!(items_len, row_count_inserted);
+                                        }
+                                    }
+
+                                    use schema::feed_items::dsl::feed_items;
+                                    use schema::feeds::dsl::feeds;
+
+                                    (
+                                        feeds
+                                            .select(FeedRecord::as_select())
+                                            .load::<FeedRecord>(conn)
+                                            .unwrap(),
+                                        feed_items
+                                            .select(FeedItemRecord::as_select())
+                                            .load::<FeedItemRecord>(conn)
+                                            .unwrap(),
+                                    )
+                                });
+
+                                // safe to unwrap because if we've added a feed, then we want
+                                // it to be automatically selected and displayed
+                                let selected_index = feeds
+                                    .iter()
+                                    .position(|val| val.name == channel.title)
+                                    .unwrap();
+                                let new_channel_feed = ChannelFeed {
+                                    name: feeds[selected_index].name.clone(),
+                                    channel_id: channel_feed.channel_id,
+                                    items: feed_items,
+                                    selected: selected_index,
+                                };
+
+                                stored_feeds.set(feeds);
+                                *view = CurrentView::SelectedFeed(new_channel_feed);
+                            }
+                            Err(err) => {
+                                dbg!(err);
+                                panic!();
+                            }
+                        };
+                    }
+                }
+            }
+            None => todo!(),
+        };
+    };
+    
+
     rsx! {
         // Global app resources
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
-         document::Stylesheet {
+        document::Stylesheet {
             // Urls are relative to your Cargo.toml file
             href: asset!("/assets/tailwind.css")
         }
@@ -266,102 +386,7 @@ fn App() -> Element {
                     "Open drawer"
                 }
                 AddFeed { current_view, stored_feeds }
-                button { class: "btn btn-primary", onclick: move |_| async move {
-                    match &mut *current_view.write() {
-                        Some(view) => {
-                            match view  {
-                                CurrentView::AllFeeds(articles) => todo!(),
-                                CurrentView::SelectedFeed(_) => {
-                                    // TODO store the feed URL in ChannelFeed struct
-                                    let (url, feed_id) = {
-                                        let feeds = stored_feeds.read();
-                                        let selected = selected_feed_index.read().unwrap();
-                                        (feeds[selected].feed_url.clone(), feeds[selected].id)
-                                    };
-
-                                    let content = reqwest::get(url.clone())
-                                        .await
-                                        .unwrap()
-                                        .bytes()
-                                        .await.unwrap();
-
-                                    let channel = Channel::read_from(&content[..]);
-                                    match channel {
-                                        Ok(channel) => {
-                                            let (feeds, feed_items, selected_feed_id) = DB.with_borrow_mut(|conn| {
-                                                {
-                                                    use diesel::dsl::insert_into;
-                                                    use crate::schema::feed_items;
-
-                                                    // TODO: when inserting, if an item URL is NULL add custom
-                                                    // handling that checks if other values are unique
-                                                    let now = Utc::now();
-                                                    let items = channel.items.clone().into_iter().map(|item|
-                                                        NewFeedItemRecord {
-                                                            channel_id: feed_id,
-                                                            title: item.title,
-                                                            url: item.link,
-                                                            description: item.description,
-                                                            author: item.author,
-                                                            pub_date: item.pub_date,
-                                                            create_date: now,
-                                                            update_date: now,
-                                                    }).collect::<Vec<_>>();
-                                                    let items_len = items.len();
-
-                                                    for item in items.into_iter() {
-                                                        let row_count_inserted = match insert_into(feed_items::table).values(item).execute(conn) {
-                                                            Ok(record) => record,
-                                                            Err(error) => {
-                                                                match error {
-                                                                    // TODO: if insert fails then try an update in future
-                                                                    DieselError::DatabaseError(database_error_kind, database_error_information) => {dbg!(database_error_kind, database_error_information); continue},
-                                                                    _ => todo!()
-                                                                }
-                                                            },
-                                                        };
-                                                        dbg!(items_len, row_count_inserted);
-                                                    }
-                                                }
-
-                                                use schema::feeds::dsl::feeds;
-                                                use schema::feed_items::dsl::feed_items;
-
-                                                (feeds
-                                                    .select(FeedRecord::as_select())
-                                                    .load::<FeedRecord>(conn)
-                                                    .unwrap(),
-                                                feed_items
-                                                    .select(FeedItemRecord::as_select())
-                                                    .load::<FeedItemRecord>(conn)
-                                                    .unwrap(),
-                                                feed_id
-                                                )
-                                            });
-
-                                            // safe to unwrap because if we've added a feed, then we want
-                                            // it to be automatically selected and displayed
-                                            let selected_index = feeds.iter().position(|val| val.name == channel.title).unwrap();
-                                            let new_channel_feed = ChannelFeed {
-                                                name: feeds[selected_index].name.clone(),
-                                                id: selected_feed_id,
-                                                items: feed_items,
-                                                selected: selected_index
-                                            };
-
-                                            stored_feeds.set(feeds);
-                                            *view = CurrentView::SelectedFeed(new_channel_feed);
-                                        },
-                                        Err(err) => {
-                                            dbg!(err); panic!();
-                                        },
-                                    };
-                                                },
-                                            }
-                                        },
-                                        None => todo!(),
-                                    };
-                },
+                button { class: "btn btn-primary", onclick: refresh_button_click_handler,
                     "Get New Articles"
                 }
                 Feed{ current_view }
@@ -370,45 +395,15 @@ fn App() -> Element {
                 label { for: "my-drawer-2", aria_label: "close sidebar", class: "drawer-overlay",
                 }
                 ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
-                    for (i, record) in stored_feeds.iter().enumerate() {
-                        li { key: "{record.id}", onmounted: move |element| async move {
-                            // scroll the selected feed into view
-                            if let Some(index) = &*selected_feed_index.read() {
-                                if *index == i {
-                                    let _ = element.scroll_to(ScrollBehavior::Smooth).await;
-                                }
-                            }
-                        },
-                        class: if selected_feed_index.read().is_some() && selected_feed_index.read().unwrap() == i {"active-feed"},
-                            {
-                                let (record_id, channel_name) = (record.id, record.name.clone());
-                                rsx!{
-                                    a { onclick: move |_| {
-                                    let items = DB.with_borrow_mut(move |conn| {
-                                        use schema::feed_items::dsl::*;
-
-                                        // select by channel id
-                                        feed_items
-                                            .filter(channel_id.eq(record_id))
-                                            .limit(100)
-                                            .select(FeedItemRecord::as_select())
-                                            .load::<FeedItemRecord>(conn)
-                                            .unwrap()
-                                    });
-                                    let channel_feed = ChannelFeed {
-                                        name: channel_name.clone(),
-                                        id: record_id,
-                                        items,
-                                        selected: i,
-                                    };
-
-                                    current_view.set(Some(CurrentView::SelectedFeed(channel_feed)));
-
-                                    },
-                                        {record.name.clone()}
-                                    }
-                                }
-                            }
+                    for (index, record) in stored_feeds.read().iter().enumerate() {
+                        SideNavItem { 
+                            current_view,
+                            selected_feed_index,
+                            feed_metadata: FeedNameId {
+                                id: record.id,
+                                channel_name: record.name.clone()
+                            },
+                            index
                         }
                     }
                 }

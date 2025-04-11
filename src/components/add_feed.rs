@@ -96,7 +96,7 @@ pub fn AddFeed(
                             let selected_index = feeds.iter().position(|val| val.name == channel.title).unwrap();
                             let channel_feed = ChannelFeed {
                                 name: feeds[selected_index].name.clone(),
-                                id: selected_feed_id,
+                                channel_id: selected_feed_id,
                                 items: feed_items,
                                 selected: selected_index 
                             };
