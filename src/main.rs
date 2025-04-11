@@ -93,6 +93,38 @@ pub struct NewFeedRecord {
     pub update_date: DateTime<Utc>,
 }
 
+#[derive(Queryable, Selectable, Clone, Debug)]
+#[diesel(table_name = schema::feed_items)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct FeedItemRecord {
+    pub id: i32,
+    pub channel_id: i32,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub author: Option<String>,
+    pub pub_date: Option<String>,
+    #[diesel(deserialize_as = StringTime)]
+    pub create_date: DateTime<Utc>,
+    #[diesel(deserialize_as = StringTime)]
+    pub update_date: DateTime<Utc>,
+}
+
+#[derive(Insertable, Clone, Debug)]
+#[diesel(table_name = schema::feed_items)]
+pub struct NewFeedItemRecord {
+    pub channel_id: i32,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub author: Option<String>,
+    pub pub_date: Option<String>,
+    #[diesel(serialize_as = StringTime)]
+    pub create_date: DateTime<Utc>,
+    #[diesel(serialize_as = StringTime)]
+    pub update_date: DateTime<Utc>,
+}
+
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
@@ -177,7 +209,15 @@ fn main() {
 
 enum CurrentView {
     AllFeeds(Vec<Article>),
-    SelectedFeed(Channel, usize),
+    // SelectedFeed(Channel, usize),
+    SelectedFeed(ChannelFeed),
+}
+
+pub struct ChannelFeed {
+    name: String,
+    id: i32,
+    items: Vec<FeedItemRecord>,
+    selected: usize,
 }
 
 #[component]
@@ -186,7 +226,7 @@ fn App() -> Element {
     let mut stored_feeds: Signal<Vec<FeedRecord>> = use_signal(Vec::new);
 
     let selected_feed_index = use_memo(move || match &*current_view.read() {
-        Some(CurrentView::SelectedFeed(_, selected_index)) => Some(*selected_index),
+        Some(CurrentView::SelectedFeed(ChannelFeed { selected, .. })) => Some(*selected),
         _ => None,
     });
 
@@ -220,7 +260,7 @@ fn App() -> Element {
                 label { for: "my-drawer-2", aria_label: "close sidebar", class: "drawer-overlay",
                 }
                 ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
-                    for (i, record) in stored_feeds.read().iter().enumerate() {
+                    for (i, record) in stored_feeds.iter().enumerate() {
                         li { onmounted: move |element| async move { 
                             // scroll the selected feed into view
                             if let Some(index) = &*selected_feed_index.read() {
@@ -230,20 +270,34 @@ fn App() -> Element {
                             }
                         },
                         class: if selected_feed_index.read().is_some() && selected_feed_index.read().unwrap() == i {"active-feed"},
-                            a { onclick: move |_| async move {
-                                let content = reqwest::get(stored_feeds.read()[i].feed_url.clone())
-                                .await.unwrap()
-                                .bytes()
-                                .await.unwrap();
-                                let channel = Channel::read_from(&content[..]);
-                                match channel {
-                                    Ok(channel) => {
-                                        current_view.set(Some(CurrentView::SelectedFeed(channel, i)));
+                            {
+                                let (record_id, channel_name) = (record.id, record.name.clone());
+                                rsx!{
+                                    a { onclick: move |_| {
+                                    let items = DB.with_borrow_mut(move |conn| {
+                                        use schema::feed_items::dsl::*;
+
+                                        // select by channel id
+                                        feed_items
+                                            .filter(channel_id.eq(record_id))
+                                            .limit(40)
+                                            .select(FeedItemRecord::as_select())
+                                            .load::<FeedItemRecord>(conn)
+                                            .unwrap()
+                                    });
+                                    let channel_feed = ChannelFeed {
+                                        name: channel_name.clone(),
+                                        id: record_id,
+                                        items,
+                                        selected: i,
+                                    };
+
+                                    current_view.set(Some(CurrentView::SelectedFeed(channel_feed)));
+
                                     },
-                                    Err(err) => panic!("{:?}", err),
-                                };
-                            },
-                                {record.name.clone()}
+                                        {record.name.clone()}
+                                    }
+                                }
                             }
                         }
                     }

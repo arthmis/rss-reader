@@ -14,11 +14,11 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                             for item in channel.items.iter() {
                                 // li { key: "{item.guid}",
                                 li {
-                                    div { class: "card card-border bg-base-100 w-96 shadow-sm",
-                                        div { class: "card-body",
+                                    div { class: "card card-border bg-base-100 min-w-[45ch] max-w-[80ch] shadow-sm",
+                                        div { class: "card-body w-full",
                                             h2 { class: "card-title",
                                         a {
-                                            href: item.link.clone().unwrap(),
+                                            href: item.url.clone().unwrap(),
                                             {item.title.clone().unwrap()}
                                         }
                                     }
@@ -37,7 +37,7 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                             for item in articles.iter() {
                                 // li { key: "{item.guid}",
                                 li {
-                                    div { class: "card card-border bg-base-100 w-96 shadow-sm",
+                                    div { class: "card card-border bg-base-100 min-w-[45ch] max-w-[80ch] shadow-sm",
                                         div { class: "card-body",
                                             h2 { class: "card-title",
                                                 a {
