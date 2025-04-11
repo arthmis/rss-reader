@@ -12,11 +12,12 @@ CREATE TABLE IF NOT EXISTS feed_items (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     channel_id INTEGER NOT NULL,
     title TEXT,
-    url TEXT UNIQUE,
+    url TEXT,
     description TEXT,
     author TEXT,
     pub_date TEXT,
     create_date TEXT NOT NULL,
     update_date TEXT NOT NULL,
+    UNIQUE(url, channel_id),
     FOREIGN KEY(channel_id) REFERENCES feeds(id)
 )
