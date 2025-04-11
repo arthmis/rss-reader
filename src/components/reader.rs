@@ -23,6 +23,9 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                                         }
                                     }
                                     p {
+                                        {item.pub_date.clone().unwrap()}
+                                    }
+                                    p {
                                         {item.description.clone().unwrap()}
                                     }
                                         }
