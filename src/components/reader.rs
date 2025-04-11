@@ -35,8 +35,7 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                         h1 { "All Articles" }
                         ul {
                             for item in articles.iter() {
-                                // li { key: "{item.guid}",
-                                li {
+                                li { key: "{item.id}",
                                     div { class: "card card-border bg-base-100 min-w-[45ch] max-w-[80ch] shadow-sm",
                                         div { class: "card-body",
                                             h2 { class: "card-title",
@@ -44,6 +43,9 @@ pub fn Feed(current_view: Signal<Option<CurrentView>> ) -> Element {
                                                     href: item.link.clone().unwrap(),
                                                     {item.title.clone().unwrap()}
                                                 }
+                                            }
+                                            p {
+                                                {item.pub_date.unwrap().format("%Y-%m-%d").to_string()}
                                             }
                                             p {
                                                 {item.description.clone().unwrap()}

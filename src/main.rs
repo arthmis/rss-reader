@@ -67,7 +67,7 @@ where
     }
 }
 
-#[derive(Queryable, Selectable, Clone, Debug)]
+#[derive(Queryable, Selectable, Identifiable, Clone, Debug, PartialEq)]
 #[diesel(table_name = schema::feeds)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct FeedRecord {
@@ -93,7 +93,15 @@ pub struct NewFeedRecord {
     pub update_date: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable, Clone, Debug)]
+#[derive(Selectable, Queryable, Clone, Debug)]
+#[diesel(table_name = schema::feeds)]
+pub struct FeedTitleUrl{
+    pub feed_url: String,
+    pub name: String,
+}
+
+#[derive(Queryable, Selectable, Identifiable, Associations, Clone, Debug, PartialEq)]
+#[diesel(belongs_to(FeedRecord, foreign_key = channel_id))]
 #[diesel(table_name = schema::feed_items)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct FeedItemRecord {
@@ -130,68 +138,71 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Article {
-    // id: Uuid,
+    id: i32,
     title: Option<String>,
     link: Option<String>,
     description: Option<String>,
     author: Option<String>,
-    guid: Option<Guid>,
+    // guid: Option<Guid>,
     pub_date: Option<DateTime<Utc>>,
     channel_title: String,
     channel_link: Url,
 }
 
 async fn load_all_feeds() -> (Vec<FeedRecord>, Vec<Article>) {
-    let feed_urls = DB.with_borrow_mut(|conn| {
-        use schema::feeds::dsl::*;
+    let (feed_urls, all_items) = DB.with_borrow_mut(|conn| {
+        let feed_urls = {
+            use schema::feeds::dsl::*;
+            feeds
+                .select(FeedRecord::as_select())
+                .load::<FeedRecord>(conn)
+                .unwrap()
+        };
 
-        feeds
-            .select(FeedRecord::as_select())
-            .load::<FeedRecord>(conn)
-            .unwrap()
+        let all_items = {
+            use schema::feed_items;
+
+            feed_items::table
+                .left_join(schema::feeds::table)
+                .select((
+                    FeedItemRecord::as_select(),
+                    Option::<FeedTitleUrl>::as_select(),
+                ))
+                .load::<(FeedItemRecord, Option<FeedTitleUrl>)>(conn)
+                .unwrap()
+        };
+        (feed_urls, all_items)
     });
 
     let mut articles = Vec::new();
-    for record in feed_urls.iter() {
-        let content = reqwest::get(&record.feed_url)
-            .await
-            .unwrap()
-            .bytes()
-            .await
-            .unwrap();
-
-        let channel = Channel::read_from(&content[..]);
-        match channel {
-            Ok(channel) => {
-                for item in channel.items {
-                    let pub_date = if let Some(date) = item.pub_date {
-                        if let Ok(time) = DateTime::parse_from_rfc2822(&date) {
-                            Some(time.into())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    let article = Article {
-                        // id: Uuid::new_v4(),
-                        title: item.title,
-                        link: item.link,
-                        description: item.description,
-                        author: item.author,
-                        guid: item.guid,
-                        pub_date,
-                        channel_title: channel.title.clone(),
-                        channel_link: Url::from_str(&channel.link).unwrap(),
-                    };
-                    articles.push(article);
-                }
+    for (item, feed_data) in all_items {
+        let pub_date = if let Some(date) = item.pub_date {
+            if let Ok(time) = DateTime::parse_from_rfc2822(&date) {
+                Some(time.into())
+            } else {
+                None
             }
-            Err(err) => {
-                panic!("{:?}", err);
-            }
+        } else {
+            None
         };
+
+        let Some(FeedTitleUrl { feed_url, name }) = feed_data else {
+            continue;
+        };
+
+        let article = Article {
+            id: item.id,
+            title: item.title,
+            link: item.url,
+            description: item.description,
+            author: item.author,
+            pub_date,
+            channel_title: name,
+            channel_link: Url::from_str(&feed_url).unwrap(),
+        };
+        articles.push(article);
     }
+
     articles.sort_by(|a, b| b.pub_date.cmp(&a.pub_date));
     articles.dedup_by(|a, b| {
         if let (Some(a), Some(b)) = (&a.link, &b.link) {
@@ -261,7 +272,7 @@ fn App() -> Element {
                 }
                 ul { class: "menu bg-base-200 text-base-content min-h-full w-80",
                     for (i, record) in stored_feeds.iter().enumerate() {
-                        li { onmounted: move |element| async move { 
+                        li { key: "{record.id}", onmounted: move |element| async move {
                             // scroll the selected feed into view
                             if let Some(index) = &*selected_feed_index.read() {
                                 if *index == i {
