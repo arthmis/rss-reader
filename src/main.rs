@@ -241,6 +241,9 @@ fn App() -> Element {
         _ => None,
     });
 
+    // TODO figure out a better way to get all items
+    // this will only run after rendering but I want to get the items before
+    // will probably need use resource
     use_effect(move || {
         spawn(async move {
             let (feed_urls, feeds) = load_all_feeds().await;

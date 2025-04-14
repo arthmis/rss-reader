@@ -8,7 +8,9 @@ edition = "2021"
 
 [dependencies]
 dioxus = { version = "0.6.0", features = [] }
-reqwest = "0.12.15"
+dioxus-free-icons = { version = "0.9", features = ["font-awesome-regular"] }
+# reqwest = "0.12.15"
+ureq = "3"
 rss = "2.0.12"
 libsqlite3-sys = { version = "0.32", features = ["bundled"] }
 diesel = { version = "2.2.9", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"]}
@@ -16,6 +18,8 @@ url = "2.5.4"
 anyhow = "1.0.97"
 chrono = "0.4"
 uuid = { version = "1.16.0", features = ["v4"] }
+dom_smoothie = "0.10.0"
+smol = "2.0.2"
 
 [features]
 default = ["desktop"]

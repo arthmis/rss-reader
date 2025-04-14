@@ -24,12 +24,8 @@ pub fn RefreshButton(
                             feeds[selected].feed_url.clone()
                         };
 
-                        let content = reqwest::get(url.clone())
-                            .await
-                            .unwrap()
-                            .bytes()
-                            .await
-                            .unwrap();
+                        let agent = ureq::agent();
+                        let content: Vec<u8> = agent.get(url.clone()).call().unwrap().into_body().read_to_vec().unwrap();
 
                         let channel = Channel::read_from(&content[..]);
                         match channel {
@@ -126,6 +122,7 @@ pub fn RefreshButton(
             None => todo!(),
         };
     };
+
     rsx! {
         button { class: "btn btn-primary", onclick: refresh_button_click_handler,
             "Get New Articles"
